@@ -1,0 +1,3 @@
+[submodule "사업/md/page-production-skills"]
+	path = 사업/md/page-production-skills
+	url = git@github.com:DeclanJeon/page-production-skills.git

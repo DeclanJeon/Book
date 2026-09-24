@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Inspector</title>
+  <style>
+    :root {
+      --bg: #1a1d23;
+      --panel: #23272e;
+      --panel-2: #2a2f38;
+      --border: #353a44;
+      --text: #e6e6e6;
+      --muted: #9aa3b1;
+      --accent: #5eb0ff;
+      --accent-2: #8b7cf6;
+      --ok: #4caf82;
+      --err: #ef6f6f;
+      --code-bg: #15171c;
+      --code-text: #d9dde4;
+      --tag: #e06c75;
+      --attr: #d19a66;
+      --str: #98c379;
+      --comment: #7f848e;
+      --punct: #c678dd;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+        "Noto Sans KR", "Malgun Gothic", Roboto, sans-serif;
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    header h1 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    header h1 .accent {
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toolbar {
+      padding: 16px 24px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .url-input {
+      flex: 1 1 320px;
+      min-width: 240px;
+      padding: 10px 14px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .url-input:focus { border-color: var(--accent); }
+
+    button {
+      padding: 10px 16px;
+      background: var(--accent);
+      color: #0b1320;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+    }
+
+    button:hover:not(:disabled) { background: #7ec3ff; }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--panel);
+      border-color: var(--accent);
+    }
+
+    .mode-group {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .mode-group button {
+      background: transparent;
+      color: var(--muted);
+      border-radius: 0;
+      padding: 10px 14px;
+      font-weight: 500;
+    }
+
+    .mode-group button.active {
+      background: var(--accent);
+      color: #0b1320;
+    }
+
+    .indent-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .indent-group input[type="number"] {
+      width: 56px;
+      padding: 6px 8px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .meta-bar {
+      padding: 8px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      min-height: 36px;
+      align-items: center;
+    }
+
+    .meta-bar .ok { color: var(--ok); }
+    .meta-bar .err { color: var(--err); }
+    .meta-bar .label { color: var(--muted); }
+    .meta-bar .value { color: var(--text); margin-left: 4px; }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .code-wrap {
+      flex: 1;
+      overflow: auto;
+      background: var(--code-bg);
+      padding: 16px 24px;
+    }
+
+    pre.code {
+      margin: 0;
+      font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--code-text);
+      white-space: pre;
+      tab-size: 2;
+    }
+
+    pre.code .tag { color: var(--tag); }
+    pre.code .attr { color: var(--attr); }
+    pre.code .str { color: var(--str); }
+    pre.code .comment { color: var(--comment); font-style: italic; }
+    pre.code .punct { color: var(--punct); }
+    pre.code .doctype { color: var(--comment); }
+
+    .empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 60px 24px;
+      text-align: center;
+    }
+
+    .empty[hidden] { display: none; }
+    .code-wrap[hidden] { display: none; }
+
+    .empty .hint {
+      max-width: 480px;
+      line-height: 1.7;
+    }
+
+    .empty code {
+      background: var(--panel);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--muted);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: -2px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { border-color: var(--ok); }
+    .toast.err { border-color: var(--err); }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 10px 18px;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      border-radius: 0;
+    }
+
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    .batch-panel {
+      padding: 16px 24px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .batch-panel .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .batch-textarea {
+      width: 100%;
+      min-height: 140px;
+      max-height: 240px;
+      padding: 12px 14px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      outline: none;
+    }
+
+    .batch-textarea:focus { border-color: var(--accent); }
+
+    .file-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .file-label:hover { border-color: var(--accent); }
+    .file-label input { display: none; }
+
+    .batch-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .batch-stats .v { color: var(--text); margin-left: 4px; }
+    .batch-stats .v.ok { color: var(--ok); }
+    .batch-stats .v.err { color: var(--err); }
+
+    .progress {
+      width: 100%;
+      height: 6px;
+      background: var(--panel);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress > div {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      width: 0;
+      transition: width 0.15s;
+    }
+
+    .batch-results {
+      flex: 1;
+      overflow: auto;
+      padding: 12px 24px;
+      background: var(--code-bg);
+    }
+
+    .batch-results table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .batch-results th, .batch-results td {
+      text-align: left;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .batch-results th {
+      color: var(--muted);
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+      background: var(--code-bg);
+    }
+
+    .batch-results td.url { font-family: "SF Mono", Menlo, monospace; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .batch-results .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+    .batch-results .pill.ok { background: rgba(76,175,130,0.15); color: var(--ok); }
+    .batch-results .pill.err { background: rgba(239,111,111,0.15); color: var(--err); }
+    .batch-results td.err-cell { color: var(--err); font-size: 11px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    @media (max-width: 720px) {
+      header, .toolbar, .meta-bar, .code-wrap { padding-left: 16px; padding-right: 16px; }
+      .url-input { min-width: 0; flex-basis: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span class="accent">HTML</span> Inspector</h1>
+    <p>URL을 입력하면 해당 페이지의 HTML 구조를 가져와 보여줍니다. 여러 URL은 일괄로 zip 다운로드.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="single">단일 URL</button>
+    <button class="tab" data-tab="batch">일괄 처리 (zip)</button>
+  </div>
+
+  <main>
+    <!-- 단일 URL 패널 -->
+    <section id="tab-single" class="tab-panel active">
+      <div class="toolbar">
+        <input id="url" class="url-input" type="text" placeholder="https://example.com" />
+        <div class="mode-group">
+          <button id="mode-pretty" class="active" data-mode="pretty">Pretty</button>
+          <button id="mode-raw" data-mode="raw">Raw</button>
+        </div>
+        <div class="indent-group">
+          <span>Indent</span>
+          <input id="indent" type="number" min="1" max="8" value="2" />
+        </div>
+        <button id="fetch-btn">가져오기</button>
+        <button id="copy-btn" class="secondary" disabled>복사</button>
+        <button id="download-btn" class="secondary" disabled>파일로 저장</button>
+      </div>
+
+      <div id="meta" class="meta-bar"></div>
+
+      <div id="empty" class="empty">
+        <div class="hint">
+          위쪽에 URL을 입력하고 <strong>가져오기</strong>를 누르세요.<br />
+          예) <code>https://example.com</code> 또는 <code>example.com</code>
+        </div>
+      </div>
+      <div id="code-wrap" class="code-wrap" hidden>
+        <pre id="code" class="code"></pre>
+      </div>
+    </section>
+
+    <!-- 일괄 패널 -->
+    <section id="tab-batch" class="tab-panel">
+      <div class="batch-panel">
+        <textarea id="batch-urls" class="batch-textarea" placeholder="한 줄에 하나씩 URL 입력&#10;https://example.com&#10;example.com/path&#10;# 주석은 #으로 시작"></textarea>
+        <div class="row">
+          <label class="file-label">
+            <span>📄 파일에서 불러오기 (.txt/.csv)</span>
+            <input id="batch-file" type="file" accept=".txt,.csv,text/plain,text/csv" />
+          </label>
+          <div class="indent-group">
+            <span>Indent</span>
+            <input id="batch-indent" type="number" min="1" max="8" value="2" />
+          </div>
+          <button id="batch-go">일괄 가져오기 (zip)</button>
+          <button id="batch-clear" class="secondary">비우기</button>
+        </div>
+        <div class="progress" id="batch-progress"><div></div></div>
+        <div class="batch-stats" id="batch-stats">
+          <span><span class="label">상태:</span><span class="v" id="batch-status">대기 중</span></span>
+          <span><span class="label">총:</span><span class="v" id="batch-total">0</span></span>
+          <span><span class="label">성공:</span><span class="v ok" id="batch-ok">0</span></span>
+          <span><span class="label">실패:</span><span class="v err" id="batch-err">0</span></span>
+        </div>
+      </div>
+      <div class="batch-results">
+        <table id="batch-table">
+          <thead>
+            <tr><th>#</th><th>URL</th><th>상태</th><th>크기</th><th>메시지</th></tr>
+          </thead>
+          <tbody id="batch-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const urlInput = $("url");
+    const fetchBtn = $("fetch-btn");
+    const copyBtn = $("copy-btn");
+    const downloadBtn = $("download-btn");
+    const modePretty = $("mode-pretty");
+    const modeRaw = $("mode-raw");
+    const indentInput = $("indent");
+    const meta = $("meta");
+    const empty = $("empty");
+    const codeWrap = $("code-wrap");
+    const codeEl = $("code");
+    const toast = $("toast");
+
+    let currentHtml = "";
+    let currentUrl = "";
+
+    function showToast(msg, kind = "") {
+      toast.textContent = msg;
+      toast.className = "toast show " + kind;
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { toast.className = "toast"; }, 2200);
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    function highlight(html) {
+      let s = escapeHtml(html);
+      s = s.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="comment">$1</span>');
+      s = s.replace(/(&lt;!DOCTYPE[^&]*&gt;)/gi, '<span class="doctype">$1</span>');
+      s = s.replace(/(&lt;\/?)([a-zA-Z][a-zA-Z0-9-]*)([^&]*?)(\/?&gt;)/g, (m, p1, p2, p3, p4) => {
+        const attrs = p3.replace(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)(\s*=\s*)("[^"]*"|'[^']*'|[^\s"'=<>`]+)/g,
+          (mm, name, eq, val) => {
+            const isStr = /^["']/.test(val);
+            return `<span class="attr">${name}</span>${eq}<span class="str">${val}</span>`;
+          });
+        return `${p1}<span class="tag">${p2}</span>${attrs}${p4}`;
+      });
+      return s;
+    }
+
+    function setMode(mode) {
+      modePretty.classList.toggle("active", mode === "pretty");
+      modeRaw.classList.toggle("active", mode === "raw");
+    }
+
+    function setBusy(busy) {
+      fetchBtn.disabled = busy;
+      urlInput.disabled = busy;
+      if (busy) {
+        meta.innerHTML = '<span class="spinner"></span>가져오는 중…';
+      }
+    }
+
+    function setMeta({ ok, url, status, contentType, sizeBytes, finalEncoding, error }) {
+      if (!ok) {
+        meta.innerHTML = `<span class="err">실패</span><span class="label">사유:</span><span class="value">${escapeHtml(error || "알 수 없음")}</span>`;
+        return;
+      }
+      const fmtSize = (sizeBytes || 0).toLocaleString();
+      meta.innerHTML = `
+        <span class="ok">성공</span>
+        <span><span class="label">상태:</span><span class="value">${status}</span></span>
+        <span><span class="label">최종 URL:</span><span class="value">${escapeHtml(url)}</span></span>
+        <span><span class="label">타입:</span><span class="value">${escapeHtml(contentType || "-")}</span></span>
+        <span><span class="label">인코딩:</span><span class="value">${escapeHtml(finalEncoding || "-")}</span></span>
+        <span><span class="label">크기:</span><span class="value">${fmtSize} bytes</span></span>
+      `;
+    }
+
+    async function doFetch() {
+      const url = urlInput.value.trim();
+      if (!url) { showToast("URL을 입력해주세요.", "err"); urlInput.focus(); return; }
+      const mode = modePretty.classList.contains("active") ? "pretty" : "raw";
+      const indent = Math.max(1, Math.min(8, parseInt(indentInput.value, 10) || 2));
+
+      currentUrl = url;
+      setBusy(true);
+      copyBtn.disabled = true;
+      downloadBtn.disabled = true;
+
+      try {
+        const r = await fetch(`/api/fetch?url=${encodeURIComponent(url)}&mode=${mode}&indent=${indent}`);
+        const data = await r.json();
+        if (!data.ok) {
+          setMeta(data);
+          empty.hidden = false;
+          codeWrap.hidden = true;
+          showToast("가져오기 실패", "err");
+          return;
+        }
+        setMeta(data);
+        currentHtml = data.html;
+        codeEl.innerHTML = highlight(data.html);
+        empty.hidden = true;
+        codeWrap.hidden = false;
+        copyBtn.disabled = false;
+        downloadBtn.disabled = false;
+        showToast("가져오기 완료", "ok");
+      } catch (e) {
+        setMeta({ ok: false, error: String(e) });
+        showToast("네트워크 오류", "err");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function copyHtml() {
+      if (!currentHtml) return;
+      try {
+        await navigator.clipboard.writeText(currentHtml);
+        showToast("클립보드에 복사됨", "ok");
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = currentHtml;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); showToast("클립보드에 복사됨", "ok"); }
+        catch { showToast("복사 실패", "err"); }
+        finally { document.body.removeChild(ta); }
+      }
+    }
+
+    function downloadHtml() {
+      if (!currentHtml) return;
+      let name = "page.html";
+      try {
+        const u = new URL(currentUrl.startsWith("http") ? currentUrl : "https://" + currentUrl);
+        const last = u.pathname.split("/").filter(Boolean).pop();
+        if (last && /\.(html|htm)$/i.test(last)) name = last;
+      } catch {}
+      const blob = new Blob([currentHtml], { type: "text/html;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    fetchBtn.addEventListener("click", doFetch);
+    urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doFetch(); });
+    copyBtn.addEventListener("click", copyHtml);
+    downloadBtn.addEventListener("click", downloadHtml);
+
+    modePretty.addEventListener("click", () => { setMode("pretty"); if (currentHtml) doFetch(); });
+    modeRaw.addEventListener("click", () => { setMode("raw"); if (currentHtml) doFetch(); });
+    indentInput.addEventListener("input", () => {
+      if (currentHtml) {
+        clearTimeout(indentInput._t);
+        indentInput._t = setTimeout(doFetch, 250);
+      }
+    });
+
+    // ---- 탭 전환 ----
+    const tabs = document.querySelectorAll(".tab");
+    const tabPanels = {
+      single: document.getElementById("tab-single"),
+      batch: document.getElementById("tab-batch"),
+    };
+    tabs.forEach((t) => {
+      t.addEventListener("click", () => {
+        tabs.forEach((x) => x.classList.toggle("active", x === t));
+        Object.entries(tabPanels).forEach(([k, p]) => {
+          p.classList.toggle("active", t.dataset.tab === k);
+        });
+      });
+    });
+
+    // ---- 일괄 처리 ----
+    const batchTextarea = document.getElementById("batch-urls");
+    const batchFile = document.getElementById("batch-file");
+    const batchIndent = document.getElementById("batch-indent");
+    const batchGo = document.getElementById("batch-go");
+    const batchClear = document.getElementById("batch-clear");
+    const batchProgress = document.querySelector("#batch-progress > div");
+    const batchStatus = document.getElementById("batch-status");
+    const batchTotal = document.getElementById("batch-total");
+    const batchOk = document.getElementById("batch-ok");
+    const batchErr = document.getElementById("batch-err");
+    const batchTbody = document.getElementById("batch-tbody");
+
+    function parseBatchUrls(text) {
+      return text
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter((s) => s && !s.startsWith("#"));
+    }
+
+    function setBatchProgress(done, total) {
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      batchProgress.style.width = pct + "%";
+    }
+
+    function appendBatchRow(idx, url, ok, status, size, msg) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${idx}</td>
+        <td class="url" title="${escapeHtml(url)}">${escapeHtml(url)}</td>
+        <td><span class="pill ${ok ? "ok" : "err"}">${ok ? "성공" : "실패"} ${status || ""}</span></td>
+        <td>${size ? size.toLocaleString() + " B" : "-"}</td>
+        <td class="err-cell" title="${escapeHtml(msg || "")}">${escapeHtml(msg || "")}</td>
+      `;
+      batchTbody.appendChild(tr);
+    }
+
+    function resetBatchUi() {
+      batchTbody.innerHTML = "";
+      batchOk.textContent = "0";
+      batchErr.textContent = "0";
+      batchProgress.style.width = "0%";
+    }
+
+    batchFile.addEventListener("change", async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const text = await f.text();
+      const existing = batchTextarea.value.trim();
+      const lines = parseBatchUrls(text);
+      const merged = existing
+        ? existing + "\n" + lines.join("\n")
+        : lines.join("\n");
+      batchTextarea.value = merged;
+      showToast(`${lines.length}개 URL 불러옴`, "ok");
+      batchFile.value = "";
+    });
+
+    batchClear.addEventListener("click", () => {
+      batchTextarea.value = "";
+      resetBatchUi();
+      batchStatus.textContent = "대기 중";
+      batchTotal.textContent = "0";
+    });
+
+    batchGo.addEventListener("click", async () => {
+      const urls = parseBatchUrls(batchTextarea.value);
+      if (urls.length === 0) {
+        showToast("URL을 입력해주세요.", "err");
+        return;
+      }
+      const indent = Math.max(1, Math.min(8, parseInt(batchIndent.value, 10) || 2));
+
+      resetBatchUi();
+      batchTotal.textContent = urls.length;
+      batchStatus.textContent = "처리 중…";
+      batchGo.disabled = true;
+      batchClear.disabled = true;
+      let succeeded = 0;
+      let failed = 0;
+
+      // 진행 상황을 미리 한 줄씩 만들어두고, 응답 후 채우기
+      for (let i = 0; i < urls.length; i++) appendBatchRow(i + 1, urls[i], false, "", null, "대기 중");
+      const rows = batchTbody.querySelectorAll("tr");
+
+      try {
+        const r = await fetch("/api/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls, indent }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ error: "zip 생성 실패" }));
+          showToast(err.error || "zip 생성 실패", "err");
+          batchStatus.textContent = "실패";
+          return;
+        }
+        const blob = await r.blob();
+        succeeded = parseInt(r.headers.get("X-Stats-Succeeded") || "0", 10);
+        failed = parseInt(r.headers.get("X-Stats-Failed") || "0", 10);
+
+        // 각 행에 결과 반영 (zip의 manifest는 서버 측 통계만 알 수 있고,
+        // 개별 결과 메시지는 헤더에 없으므로 표에는 zip 통계를 그대로 표시)
+        for (let i = 0; i < rows.length; i++) {
+          const cells = rows[i].querySelectorAll("td");
+          const pill = cells[2].querySelector(".pill");
+          if (i < succeeded) {
+            pill.className = "pill ok";
+            pill.textContent = "성공";
+            cells[4].textContent = "zip에 포함됨";
+          } else {
+            pill.className = "pill err";
+            pill.textContent = "실패";
+            cells[4].textContent = "errors.log 참조";
+          }
+          cells[3].textContent = "-";
+        }
+        batchOk.textContent = succeeded;
+        batchErr.textContent = failed;
+        setBatchProgress(urls.length, urls.length);
+
+        // zip 다운로드
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+        a.href = url;
+        a.download = `html-inspector-${ts}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        showToast(`zip 다운로드 완료 (성공 ${succeeded}, 실패 ${failed})`, failed ? "err" : "ok");
+        batchStatus.textContent = `완료 (성공 ${succeeded} / 실패 ${failed})`;
+      } catch (e) {
+        showToast("네트워크 오류: " + e, "err");
+        batchStatus.textContent = "오류";
+      } finally {
+        batchGo.disabled = false;
+        batchClear.disabled = false;
+      }
+    });
+
+    urlInput.focus();
+  </script>
+</body>
+</html>

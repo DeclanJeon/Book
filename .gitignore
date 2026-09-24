@@ -1,0 +1,14 @@
+# Python / tooling artifacts
+venv/
+__pycache__/
+*.pyc
+
+# Tool state dirs
+.omo/
+.commandcode/
+.codegraph
+.codegraph/
+
+# OS
+.DS_Store
+Thumbs.db
